@@ -1,0 +1,134 @@
+from dataclasses import dataclass
+
+from src.geocoding import NominatimGeocoder
+from src.models import Coordinates
+from src.routing import OSRMRouter
+
+
+@dataclass
+class FakeResponse:
+    payload: object
+    status_code: int = 200
+
+    def json(self) -> object:
+        return self.payload
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"http {self.status_code}")
+
+
+class FakeSession:
+    def __init__(self, payload: object) -> None:
+        self.payload = payload
+        self.calls: list[tuple[str, dict[str, object]]] = []
+
+    def get(self, url: str, *, params: dict[str, object], timeout: float, headers: dict[str, str]) -> FakeResponse:
+        self.calls.append(
+            (
+                url,
+                {
+                    "params": params,
+                    "timeout": timeout,
+                    "headers": headers,
+                },
+            )
+        )
+        return FakeResponse(self.payload)
+
+
+def test_nominatim_geocoder_returns_first_result() -> None:
+    session = FakeSession(
+        [
+            {
+                "display_name": "Madrid, Community of Madrid, Spain",
+                "lat": "40.4168",
+                "lon": "-3.7038",
+            }
+        ]
+    )
+    geocoder = NominatimGeocoder(
+        base_url="https://example.test/search",
+        reverse_base_url="https://example.test/reverse",
+        user_agent="sun-router-test",
+        timeout_s=5.0,
+        session=session,
+    )
+
+    result = geocoder.geocode("Madrid")
+
+    assert result is not None
+    assert result.label.startswith("Madrid")
+    assert result.coordinates == Coordinates(lat=40.4168, lon=-3.7038)
+
+
+def test_nominatim_geocoder_returns_none_when_empty() -> None:
+    geocoder = NominatimGeocoder(
+        base_url="https://example.test/search",
+        reverse_base_url="https://example.test/reverse",
+        user_agent="sun-router-test",
+        timeout_s=5.0,
+        session=FakeSession([]),
+    )
+
+    assert geocoder.geocode("Nowhere") is None
+
+
+def test_nominatim_reverse_geocoder_returns_result() -> None:
+    session = FakeSession(
+        {
+            "display_name": "Puerta del Sol, Madrid, Spain",
+            "lat": "40.4169",
+            "lon": "-3.7035",
+        }
+    )
+    geocoder = NominatimGeocoder(
+        base_url="https://example.test/search",
+        reverse_base_url="https://example.test/reverse",
+        user_agent="sun-router-test",
+        timeout_s=5.0,
+        session=session,
+    )
+
+    result = geocoder.reverse_geocode(Coordinates(lat=40.4169, lon=-3.7035))
+
+    assert result is not None
+    assert result.label.startswith("Puerta del Sol")
+    assert result.coordinates == Coordinates(lat=40.4169, lon=-3.7035)
+
+
+def test_osrm_router_parses_geojson_routes() -> None:
+    session = FakeSession(
+        {
+            "routes": [
+                {
+                    "distance": 1200.0,
+                    "duration": 600.0,
+                    "geometry": {"coordinates": [[-3.7, 40.4], [-3.69, 40.41]]},
+                },
+                {
+                    "distance": 1300.0,
+                    "duration": 650.0,
+                    "geometry": {"coordinates": [[-3.7, 40.4], [-3.68, 40.42]]},
+                },
+            ]
+        }
+    )
+    router = OSRMRouter(
+        base_url="https://example.test/route/v1",
+        user_agent="sun-router-test",
+        timeout_s=5.0,
+        max_alternatives=2,
+        session=session,
+    )
+
+    routes = router.get_routes(
+        origin=Coordinates(lat=40.4, lon=-3.7),
+        destination=Coordinates(lat=40.42, lon=-3.68),
+        profile="driving",
+    )
+
+    assert len(routes) == 2
+    assert routes[0].metrics.distance_m == 1200.0
+    assert routes[0].geometry[0] == Coordinates(lat=40.4, lon=-3.7)
+    assert routes[1].geometry[-1] == Coordinates(lat=40.42, lon=-3.68)
