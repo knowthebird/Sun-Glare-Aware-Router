@@ -2,12 +2,20 @@ from __future__ import annotations
 
 from datetime import date, time
 
-from src.models import AnalysisRequest, Coordinates, GeocodeResult, LocationPickerState, SelectedLocation
+from src.models import (
+    AnalysisRequest,
+    Coordinates,
+    GeocodeResult,
+    LocationPickerState,
+    SelectedLocation,
+)
 from src.solar import resolve_local_datetime
 from src.utils import format_coordinates_label
 
 
-def create_picker_state(default_query: str, default_center: Coordinates) -> LocationPickerState:
+def create_picker_state(
+    default_query: str, default_center: Coordinates
+) -> LocationPickerState:
     return LocationPickerState(
         query_text=default_query,
         provisional_result=None,
@@ -25,7 +33,9 @@ def apply_picker_search_result(
     return LocationPickerState(
         query_text=query_text,
         provisional_result=geocoded_result,
-        map_center=geocoded_result.coordinates if geocoded_result is not None else state.map_center,
+        map_center=geocoded_result.coordinates
+        if geocoded_result is not None
+        else state.map_center,
         confirmed_location=None,
         map_revision=state.map_revision + 1,
     )
@@ -64,8 +74,13 @@ def confirm_picker_location(
     )
 
 
-def can_generate_routes(origin: LocationPickerState, destination: LocationPickerState) -> bool:
-    return origin.confirmed_location is not None and destination.confirmed_location is not None
+def can_generate_routes(
+    origin: LocationPickerState, destination: LocationPickerState
+) -> bool:
+    return (
+        origin.confirmed_location is not None
+        and destination.confirmed_location is not None
+    )
 
 
 def build_analysis_request(

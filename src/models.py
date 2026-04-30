@@ -38,6 +38,21 @@ class SunPosition:
 
 
 @dataclass(frozen=True)
+class RouteSegmentRisk:
+    start_coordinates: Coordinates
+    end_coordinates: Coordinates
+    midpoint_coordinates: Coordinates
+    segment_length_m: float
+    estimated_duration_s: float
+    start_offset_s: float
+    midpoint_offset_s: float
+    bearing_deg: float
+    angle_difference_deg: float
+    sun_position: SunPosition
+    glare_score: float
+
+
+@dataclass(frozen=True)
 class RouteEvaluation:
     route: Route
     glare_score: float
@@ -45,6 +60,12 @@ class RouteEvaluation:
     peak_segment_score: float
     aligned_distance_m: float
     dominant_bearing_deg: float | None = None
+    high_risk_distance_m: float = 0.0
+    high_risk_duration_s: float = 0.0
+    peak_risk_time_offset_min: float | None = None
+    peak_risk_distance_m: float | None = None
+    peak_risk_coordinates: Coordinates | None = None
+    segment_risks: list[RouteSegmentRisk] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

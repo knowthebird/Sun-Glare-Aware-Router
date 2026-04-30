@@ -23,7 +23,9 @@ def calculate_bearing(start: Coordinates, end: Coordinates) -> float:
     delta_lon = math.radians(end.lon - start.lon)
 
     y = math.sin(delta_lon) * math.cos(lat2)
-    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(delta_lon)
+    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(
+        delta_lon
+    )
     bearing = (math.degrees(math.atan2(y, x)) + 360.0) % 360.0
     rounded = round(bearing, 6)
     return 0.0 if rounded == 360.0 else rounded
@@ -44,6 +46,13 @@ def haversine_distance_m(start: Coordinates, end: Coordinates) -> float:
     a = sin_half_lat**2 + math.cos(lat1) * math.cos(lat2) * sin_half_lon**2
     c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
     return EARTH_RADIUS_M * c
+
+
+def midpoint_coordinates(start: Coordinates, end: Coordinates) -> Coordinates:
+    return Coordinates(
+        lat=(start.lat + end.lat) / 2.0,
+        lon=(start.lon + end.lon) / 2.0,
+    )
 
 
 def compass_direction(angle_deg: float) -> str:

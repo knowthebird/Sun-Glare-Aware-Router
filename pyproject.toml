@@ -9,18 +9,23 @@ description = "A Streamlit MVP that compares route alternatives for sun glare ri
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "OpenAI Codex" }]
+authors = [{ name = "Alejandro Mata Ali" }]
 dependencies = [
   "streamlit>=1.43,<2.0",
   "requests>=2.32,<3.0",
   "astral>=3.2,<4.0",
   "folium>=0.18,<1.0",
   "streamlit-folium>=0.24,<1.0",
+  "python-dotenv>=1.0,<2.0",
   "tzdata>=2024.1; platform_system == 'Windows'",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0,<9.0"]
+dev = [
+  "pytest>=8.0,<9.0",
+  "ruff>=0.11,<0.12",
+  "pyright>=1.1.0,<2.0",
+]
 
 [tool.setuptools]
 packages = ["src"]
@@ -28,4 +33,3 @@ packages = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q -p no:cacheprovider"
-

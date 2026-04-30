@@ -23,7 +23,14 @@ class FakeSession:
         self.payload = payload
         self.calls: list[tuple[str, dict[str, object]]] = []
 
-    def get(self, url: str, *, params: dict[str, object], timeout: float, headers: dict[str, str]) -> FakeResponse:
+    def get(
+        self,
+        url: str,
+        *,
+        params: dict[str, object],
+        timeout: float,
+        headers: dict[str, str],
+    ) -> FakeResponse:
         self.calls.append(
             (
                 url,
@@ -35,6 +42,33 @@ class FakeSession:
             )
         )
         return FakeResponse(self.payload)
+
+
+class SequenceFakeSession:
+    def __init__(self, payloads: list[object]) -> None:
+        self.payloads = payloads
+        self.calls: list[tuple[str, dict[str, object]]] = []
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: dict[str, object],
+        timeout: float,
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        self.calls.append(
+            (
+                url,
+                {
+                    "params": params,
+                    "timeout": timeout,
+                    "headers": headers,
+                },
+            )
+        )
+        index = min(len(self.calls) - 1, len(self.payloads) - 1)
+        return FakeResponse(self.payloads[index])
 
 
 def test_nominatim_geocoder_returns_first_result() -> None:
@@ -132,3 +166,69 @@ def test_osrm_router_parses_geojson_routes() -> None:
     assert routes[0].metrics.distance_m == 1200.0
     assert routes[0].geometry[0] == Coordinates(lat=40.4, lon=-3.7)
     assert routes[1].geometry[-1] == Coordinates(lat=40.42, lon=-3.68)
+
+
+def test_osrm_router_requests_fallback_candidates_when_primary_has_one_route() -> None:
+    session = SequenceFakeSession(
+        [
+            {
+                "routes": [
+                    {
+                        "distance": 1200.0,
+                        "duration": 600.0,
+                        "geometry": {
+                            "coordinates": [[-3.7, 40.4], [-3.69, 40.41]],
+                        },
+                    }
+                ]
+            },
+            {
+                "routes": [
+                    {
+                        "distance": 1400.0,
+                        "duration": 720.0,
+                        "geometry": {
+                            "coordinates": [
+                                [-3.7, 40.4],
+                                [-3.75, 40.45],
+                                [-3.69, 40.41],
+                            ],
+                        },
+                    }
+                ]
+            },
+            {
+                "routes": [
+                    {
+                        "distance": 1500.0,
+                        "duration": 780.0,
+                        "geometry": {
+                            "coordinates": [
+                                [-3.7, 40.4],
+                                [-3.64, 40.45],
+                                [-3.69, 40.41],
+                            ],
+                        },
+                    }
+                ]
+            },
+        ]
+    )
+    router = OSRMRouter(
+        base_url="https://example.test/route/v1",
+        user_agent="sun-router-test",
+        timeout_s=5.0,
+        max_alternatives=3,
+        session=session,
+    )
+
+    routes = router.get_routes(
+        origin=Coordinates(lat=40.4, lon=-3.7),
+        destination=Coordinates(lat=40.41, lon=-3.69),
+        profile="driving",
+    )
+
+    assert len(routes) == 3
+    assert [route.metadata.get("route_index") for route in routes] == [1, 2, 3]
+    assert len(session.calls) >= 2
+    assert any(call[0].count(";") >= 2 for call in session.calls[1:])

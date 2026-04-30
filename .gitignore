@@ -5,6 +5,7 @@
 .superpowers/
 .worktrees/
 .pytest_cache/
+.ruff_cache/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -15,4 +16,3 @@ build/
 htmlcov/
 coverage.xml
 pytest-cache-files-*
-

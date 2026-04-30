@@ -13,12 +13,27 @@ from src.utils import ProviderError
 logger = logging.getLogger("sunrouter.geocoding")
 
 
-class Geocoder(Protocol):
-    def geocode(self, query: str) -> GeocodeResult | None:
-        ...
+class HTTPResponse(Protocol):
+    def raise_for_status(self) -> None: ...
 
-    def reverse_geocode(self, coordinates: Coordinates) -> GeocodeResult | None:
-        ...
+    def json(self) -> object: ...
+
+
+class HTTPSession(Protocol):
+    def get(
+        self,
+        url: str,
+        *,
+        params: dict[str, object],
+        timeout: float,
+        headers: dict[str, str],
+    ) -> HTTPResponse: ...
+
+
+class Geocoder(Protocol):
+    def geocode(self, query: str) -> GeocodeResult | None: ...
+
+    def reverse_geocode(self, coordinates: Coordinates) -> GeocodeResult | None: ...
 
 
 class NominatimGeocoder:
@@ -28,7 +43,7 @@ class NominatimGeocoder:
         reverse_base_url: str,
         user_agent: str,
         timeout_s: float,
-        session: requests.Session | object | None = None,
+        session: HTTPSession | None = None,
         cache: TTLCache[str, GeocodeResult | None] | None = None,
         rate_limiter: RateLimiter | None = None,
     ) -> None:
@@ -65,7 +80,9 @@ class NominatimGeocoder:
             )
             response.raise_for_status()
             payload = response.json()
-        except Exception as exc:  # pragma: no cover - exercised through user-facing handling
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - exercised through user-facing handling
             logger.exception("Geocoding failed for query=%s", clean_query)
             raise ProviderError(f"Geocoding request failed: {exc}") from exc
 
@@ -110,8 +127,14 @@ class NominatimGeocoder:
             )
             response.raise_for_status()
             payload = response.json()
-        except Exception as exc:  # pragma: no cover - exercised through user-facing handling
-            logger.exception("Reverse geocoding failed for lat=%.5f lon=%.5f", coordinates.lat, coordinates.lon)
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - exercised through user-facing handling
+            logger.exception(
+                "Reverse geocoding failed for lat=%.5f lon=%.5f",
+                coordinates.lat,
+                coordinates.lon,
+            )
             raise ProviderError(f"Reverse geocoding request failed: {exc}") from exc
 
         result = _parse_nominatim_reverse_result(payload)
@@ -157,7 +180,9 @@ def _parse_nominatim_reverse_result(payload: object) -> GeocodeResult | None:
 
 def build_geocoder(settings: Settings) -> Geocoder:
     if settings.geocoder_provider != "nominatim":
-        raise ProviderError(f"Unsupported geocoder provider: {settings.geocoder_provider}")
+        raise ProviderError(
+            f"Unsupported geocoder provider: {settings.geocoder_provider}"
+        )
 
     return NominatimGeocoder(
         base_url=settings.geocoder_base_url,

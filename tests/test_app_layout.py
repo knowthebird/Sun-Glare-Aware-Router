@@ -26,7 +26,7 @@ def test_app_renders_information_and_main_panel_controls() -> None:
     subheaders = [item.value for item in at.subheader]
 
     assert "Información" in _expander_labels(at)
-    assert "glare risk" in markdown_text.lower()
+    assert "riesgo de deslumbramiento" in markdown_text.lower()
     assert "cómo funciona" in markdown_text.lower()
     assert "limitaciones" in markdown_text.lower()
     assert len(at.sidebar.text_input) == 0
@@ -35,11 +35,27 @@ def test_app_renders_information_and_main_panel_controls() -> None:
     assert "Generar rutas" in button_labels
 
 
+def test_app_defaults_to_spanish_language_selector() -> None:
+    at = AppTest.from_file("app.py")
+
+    at.run()
+
+    radio_values = {
+        getattr(widget.proto, "label", ""): widget.value for widget in at.radio
+    }
+
+    assert radio_values["Idioma / Language"] == "ES"
+
+
 def test_generate_routes_is_disabled_until_both_points_are_confirmed() -> None:
     at = AppTest.from_file("app.py")
 
     at.run()
 
-    generate_button = next(button for button in at.button if getattr(button.proto, "label", "") == "Generar rutas")
+    generate_button = next(
+        button
+        for button in at.button
+        if getattr(button.proto, "label", "") == "Generar rutas"
+    )
 
     assert generate_button.proto.disabled is True

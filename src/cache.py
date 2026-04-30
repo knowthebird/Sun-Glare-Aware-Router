@@ -37,7 +37,9 @@ class TTLCache(Generic[K, V]):
             if len(self._entries) >= self.max_entries:
                 oldest_key = next(iter(self._entries))
                 self._entries.pop(oldest_key, None)
-            self._entries[key] = CacheEntry(value=value, expires_at=time.monotonic() + self.ttl_s)
+            self._entries[key] = CacheEntry(
+                value=value, expires_at=time.monotonic() + self.ttl_s
+            )
 
 
 class RateLimiter:
@@ -56,4 +58,3 @@ class RateLimiter:
                 time.sleep(sleep_for)
                 now = time.monotonic()
             self._next_allowed_at = now + self.min_interval_s
-

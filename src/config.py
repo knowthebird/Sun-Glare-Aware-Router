@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from zoneinfo import available_timezones
 
-from src.utils import suggest_default_timezone
+from dotenv import load_dotenv
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ def _env_int(name: str, default: int) -> int:
 
 
 def load_settings() -> Settings:
+    load_dotenv(dotenv_path=Path.cwd() / ".env", override=False)
     timezone_name = os.getenv("SUNROUTER_DEFAULT_TIMEZONE", "Europe/Madrid")
 
     return Settings(
@@ -60,7 +62,9 @@ def load_settings() -> Settings:
         http_timeout_s=_env_float("SUNROUTER_HTTP_TIMEOUT_S", 10.0),
         cache_ttl_s=_env_float("SUNROUTER_CACHE_TTL_S", 900.0),
         max_alternatives=_env_int("SUNROUTER_MAX_ALTERNATIVES", 3),
-        default_timezone=timezone_name if timezone_name in available_timezones() else "UTC",
+        default_timezone=timezone_name
+        if timezone_name in available_timezones()
+        else "UTC",
         log_level=os.getenv("SUNROUTER_LOG_LEVEL", "INFO").upper(),
     )
 

@@ -57,7 +57,9 @@ def test_confirm_picker_location_prefers_reverse_geocoded_label() -> None:
     default_center = Coordinates(lat=40.4168, lon=-3.7038)
     state = create_picker_state("Madrid, Spain", default_center)
     clicked = Coordinates(lat=40.4170, lon=-3.7036)
-    reverse_result = GeocodeResult(label="Puerta del Sol, Madrid, Spain", coordinates=clicked)
+    reverse_result = GeocodeResult(
+        label="Puerta del Sol, Madrid, Spain", coordinates=clicked
+    )
 
     updated = confirm_picker_location(state, clicked, reverse_result)
 
@@ -84,7 +86,9 @@ def test_confirm_picker_location_falls_back_to_query_or_coordinates() -> None:
     assert format_coordinates_label(clicked) == "40.41700, -3.70360"
 
 
-def test_confirm_picker_location_uses_typed_query_when_reverse_geocoding_fails() -> None:
+def test_confirm_picker_location_uses_typed_query_when_reverse_geocoding_fails() -> (
+    None
+):
     default_center = Coordinates(lat=40.4168, lon=-3.7038)
     state = LocationPickerState(
         query_text="Calle Princesa 1, Madrid",
@@ -113,7 +117,9 @@ def test_generate_routes_requires_both_confirmed_points() -> None:
     origin = confirm_picker_location(origin, center, None)
     assert can_generate_routes(origin, destination) is False
 
-    destination = confirm_picker_location(destination, Coordinates(lat=42.3439, lon=-3.6969), None)
+    destination = confirm_picker_location(
+        destination, Coordinates(lat=42.3439, lon=-3.6969), None
+    )
     assert can_generate_routes(origin, destination) is True
 
 
