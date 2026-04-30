@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Aligned repository metadata with the renamed GitHub repository `Sun-Glare-Aware-Router`.
 - Replaced the fixed-origin glare heuristic with a dynamic segment-by-segment solar analysis that follows route progress over time.
 - Added per-route high-risk duration, high-risk distance, peak-risk timing, and segment risk details for clearer recommendations.
 - Updated the Streamlit UI to explain glare risk in plain Spanish, show more useful comparison columns, and avoid presenting a single route as a comparative recommendation.

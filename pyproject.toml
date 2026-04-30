@@ -27,6 +27,9 @@ dev = [
   "pyright>=1.1.0,<2.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/DOKOS-TAYOS/Sun-Glare-Aware-Router"
+
 [tool.setuptools]
 packages = ["src"]
 
