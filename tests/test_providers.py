@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from src.http_client import SystemSSLContextAdapter
 from src.geocoding import NominatimGeocoder
 from src.models import Coordinates
 from src.routing import OSRMRouter
@@ -129,6 +130,30 @@ def test_nominatim_reverse_geocoder_returns_result() -> None:
     assert result is not None
     assert result.label.startswith("Puerta del Sol")
     assert result.coordinates == Coordinates(lat=40.4169, lon=-3.7035)
+
+
+def test_default_provider_sessions_use_system_ssl_context() -> None:
+    geocoder = NominatimGeocoder(
+        base_url="https://example.test/search",
+        reverse_base_url="https://example.test/reverse",
+        user_agent="sun-router-test",
+        timeout_s=5.0,
+    )
+    router = OSRMRouter(
+        base_url="https://example.test/route/v1",
+        user_agent="sun-router-test",
+        timeout_s=5.0,
+        max_alternatives=2,
+    )
+
+    assert isinstance(
+        geocoder.session.get_adapter("https://example.test"),
+        SystemSSLContextAdapter,
+    )
+    assert isinstance(
+        router.session.get_adapter("https://example.test"),
+        SystemSSLContextAdapter,
+    )
 
 
 def test_osrm_router_parses_geojson_routes() -> None:

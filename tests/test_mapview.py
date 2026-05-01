@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import app
 from src.mapview import build_route_map
 from src.models import (
     Coordinates,
+    LocationPickerState,
     Route,
     RouteEvaluation,
     RouteMetrics,
@@ -224,3 +226,31 @@ def test_build_route_map_requires_ctrl_for_mousewheel_zoom() -> None:
 
     assert '"scrollWheelZoom": false' in rendered
     assert "event.ctrlKey" in rendered
+
+
+def test_picker_map_factory_returns_fresh_maps_for_interactive_rerenders() -> None:
+    state = LocationPickerState(
+        query_text="Madrid, Spain",
+        provisional_result=None,
+        map_center=Coordinates(lat=40.4168, lon=-3.7038),
+        confirmed_location=None,
+        map_revision=0,
+    )
+
+    map_one = app.get_picker_map(
+        map_center=state.map_center,
+        provisional_result=state.provisional_result,
+        confirmed_location=state.confirmed_location,
+        picker_kind="origin",
+        language="es",
+    )
+    map_two = app.get_picker_map(
+        map_center=state.map_center,
+        provisional_result=state.provisional_result,
+        confirmed_location=state.confirmed_location,
+        picker_kind="origin",
+        language="es",
+    )
+
+    assert map_one is not map_two
+    assert map_one.get_name() != map_two.get_name()

@@ -5,6 +5,7 @@ from datetime import datetime, time, timedelta
 import logging
 from zoneinfo import ZoneInfo
 
+import folium
 import streamlit as st
 from streamlit_folium import st_folium
 
@@ -16,8 +17,10 @@ from src.models import (
     AnalysisRequest,
     AnalysisResult,
     Coordinates,
+    GeocodeResult,
     LocationPickerState,
     RouteEvaluation,
+    SelectedLocation,
     SunPosition,
 )
 from src.pickers import (
@@ -59,6 +62,42 @@ def get_geocoder(settings: Settings) -> Geocoder:
 @st.cache_resource
 def get_router(settings: Settings) -> Router:
     return build_router(settings)
+
+
+def get_picker_map(
+    map_center: Coordinates,
+    provisional_result: GeocodeResult | None,
+    confirmed_location: SelectedLocation | None,
+    picker_kind: str,
+    language: str,
+) -> folium.Map:
+    return build_picker_map(
+        LocationPickerState(
+            query_text="",
+            provisional_result=provisional_result,
+            map_center=map_center,
+            confirmed_location=confirmed_location,
+            map_revision=0,
+        ),
+        picker_kind,
+        language=language,
+    )
+
+
+def get_route_map(
+    origin: Coordinates,
+    destination: Coordinates,
+    evaluations: tuple[RouteEvaluation, ...],
+    recommended_route_id: str | None,
+    language: str,
+) -> folium.Map:
+    return build_route_map(
+        origin=origin,
+        destination=destination,
+        evaluations=list(evaluations),
+        recommended_route_id=recommended_route_id,
+        language=language,
+    )
 
 
 def inject_app_styles() -> None:
@@ -372,6 +411,35 @@ def extract_clicked_coordinates(map_data: object) -> Coordinates | None:
     return Coordinates(lat=float(lat), lon=float(lon))
 
 
+def extract_selected_coordinates(
+    *,
+    map_data: object,
+    state: LocationPickerState,
+    picker_kind: str,
+    language: str,
+) -> Coordinates | None:
+    clicked_coordinates = extract_clicked_coordinates(map_data)
+    if clicked_coordinates is not None:
+        return clicked_coordinates
+
+    if not isinstance(map_data, dict):
+        return None
+
+    object_tooltip = map_data.get("last_object_clicked_tooltip")
+    if not isinstance(object_tooltip, str):
+        return None
+
+    provisional_tooltip = t(language, f"map.{picker_kind}_provisional")
+    if object_tooltip == provisional_tooltip and state.provisional_result is not None:
+        return state.provisional_result.coordinates
+
+    confirmed_tooltip = t(language, f"map.{picker_kind}_confirmed")
+    if object_tooltip == confirmed_tooltip and state.confirmed_location is not None:
+        return state.confirmed_location.coordinates
+
+    return None
+
+
 def build_analysis_result(
     request: AnalysisRequest,
     router: Router,
@@ -447,6 +515,64 @@ def picker_status_text(
     return ("info", t(language, "picker.status.prompt"))
 
 
+def resolve_picker_confirmation(
+    *,
+    state: LocationPickerState,
+    query_text: str,
+    clicked_coordinates: Coordinates,
+    geocoder: Geocoder,
+    picker_kind: str,
+    language: str,
+) -> tuple[LocationPickerState, str | None]:
+    warning_message: str | None = None
+    try:
+        reverse_result = geocoder.reverse_geocode(clicked_coordinates)
+    except ProviderError:
+        logger.warning(
+            "Reverse geocoding failed for %s picker at lat=%.5f lon=%.5f",
+            picker_kind,
+            clicked_coordinates.lat,
+            clicked_coordinates.lon,
+            exc_info=True,
+        )
+        reverse_result = None
+        warning_message = t(language, "picker.reverse_geocode_warning")
+
+    live_state = (
+        state
+        if query_text == state.query_text
+        else replace(state, query_text=query_text)
+    )
+    updated_state = confirm_picker_location(
+        live_state,
+        clicked_coordinates,
+        reverse_result,
+    )
+    return updated_state, warning_message
+
+
+def resolve_picker_search(
+    *,
+    state: LocationPickerState,
+    query_text: str,
+    geocoder: Geocoder,
+    picker_kind: str,
+    language: str,
+) -> tuple[LocationPickerState, str | None]:
+    try:
+        result = geocoder.geocode(query_text)
+    except ProviderError:
+        logger.warning(
+            "Geocoding failed for %s picker with query=%s",
+            picker_kind,
+            query_text,
+            exc_info=True,
+        )
+        return state, t(language, "picker.search_failed_warning")
+
+    return apply_picker_search_result(state, query_text, result), None
+
+
 def render_picker(
     *,
     title: str,
@@ -474,12 +600,16 @@ def render_picker(
             st.warning(t(language, "picker.search_empty_warning"))
         else:
             logger.info("Searching %s picker with query=%s", picker_kind, query_text)
-            result = geocoder.geocode(query_text)
-            st.session_state[state_key] = apply_picker_search_result(
-                state,
-                query_text,
-                result,
+            updated_state, error_message = resolve_picker_search(
+                state=state,
+                query_text=query_text,
+                geocoder=geocoder,
+                picker_kind=picker_kind,
+                language=language,
             )
+            st.session_state[state_key] = updated_state
+            if error_message is not None:
+                st.session_state[f"{state_key}_error"] = error_message
             clear_analysis_result()
             st.rerun()
 
@@ -491,15 +621,26 @@ def render_picker(
     getattr(st, status_kind)(status_message)
     st.caption(t(language, "picker.caption"))
 
-    picker_map = build_picker_map(state, picker_kind, language=language)
+    picker_map = get_picker_map(
+        map_center=state.map_center,
+        provisional_result=state.provisional_result,
+        confirmed_location=state.confirmed_location,
+        picker_kind=picker_kind,
+        language=language,
+    )
     map_data = st_folium(
         picker_map,
         key=f"{picker_kind}_picker_map_{state.map_revision}",
         height=320,
         use_container_width=True,
-        returned_objects=["last_clicked"],
+        returned_objects=["last_clicked", "last_object_clicked_tooltip"],
     )
-    clicked_coordinates = extract_clicked_coordinates(map_data)
+    clicked_coordinates = extract_selected_coordinates(
+        map_data=map_data,
+        state=state,
+        picker_kind=picker_kind,
+        language=language,
+    )
     if clicked_coordinates is not None:
         confirmed = state.confirmed_location
         if confirmed is None or confirmed.coordinates != clicked_coordinates:
@@ -509,20 +650,28 @@ def render_picker(
                 clicked_coordinates.lat,
                 clicked_coordinates.lon,
             )
-            reverse_result = geocoder.reverse_geocode(clicked_coordinates)
-            live_state = (
-                state
-                if query_text == state.query_text
-                else replace(state, query_text=query_text)
-            )
-            updated_state = confirm_picker_location(
-                live_state,
-                clicked_coordinates,
-                reverse_result,
+            updated_state, warning_message = resolve_picker_confirmation(
+                state=state,
+                query_text=query_text,
+                clicked_coordinates=clicked_coordinates,
+                geocoder=geocoder,
+                picker_kind=picker_kind,
+                language=language,
             )
             st.session_state[state_key] = updated_state
+            if warning_message is not None:
+                st.session_state[f"{state_key}_warning"] = warning_message
             clear_analysis_result()
             st.rerun()
+
+    warning_state_key = f"{state_key}_warning"
+    warning_message = st.session_state.pop(warning_state_key, None)
+    if isinstance(warning_message, str):
+        st.warning(warning_message)
+    error_state_key = f"{state_key}_error"
+    error_message = st.session_state.pop(error_state_key, None)
+    if isinstance(error_message, str):
+        st.error(error_message)
 
     return ensure_picker_state(
         state_key,
@@ -552,10 +701,10 @@ def render_analysis(result: AnalysisResult, settings: Settings, language: str) -
     else:
         st.info(t(language, "analysis.single_route"))
 
-    route_map = build_route_map(
+    route_map = get_route_map(
         origin=result.request.origin.coordinates,
         destination=result.request.destination.coordinates,
-        evaluations=result.ranked_routes,
+        evaluations=tuple(result.ranked_routes),
         recommended_route_id=recommended.route.route_id,
         language=language,
     )
@@ -671,24 +820,13 @@ def main() -> None:
     render_information(language)
 
     left_panel, right_panel = st.columns([1, 1])
+    right_panel_container = right_panel.container()
 
-    with right_panel:
-        origin_state = render_picker(
-            title=t(language, "picker.origin"),
-            picker_kind="origin",
-            state_key=ORIGIN_PICKER_STATE_KEY,
-            input_key="origin_query_input",
-            geocoder=geocoder,
-            language=language,
-        )
-        destination_state = render_picker(
-            title=t(language, "picker.destination"),
-            picker_kind="destination",
-            state_key=DESTINATION_PICKER_STATE_KEY,
-            input_key="destination_query_input",
-            geocoder=geocoder,
-            language=language,
-        )
+    origin_state = ensure_picker_state(ORIGIN_PICKER_STATE_KEY, DEFAULT_ORIGIN_QUERY)
+    destination_state = ensure_picker_state(
+        DESTINATION_PICKER_STATE_KEY,
+        DEFAULT_DESTINATION_QUERY,
+    )
 
     current_request = build_analysis_request(
         origin_state,
@@ -753,14 +891,29 @@ def main() -> None:
         saved_result = get_saved_analysis_result()
         if saved_result is None:
             st.info(t(language, "analysis.empty_result"))
-            return
-
-        if current_request is None or saved_result.request != current_request:
+        elif current_request is None or saved_result.request != current_request:
             st.info(t(language, "analysis.needs_refresh"))
-            return
+        else:
+            render_analysis(saved_result, settings, language)
+            saved_result_to_render = saved_result
 
-        render_analysis(saved_result, settings, language)
-        saved_result_to_render = saved_result
+    with right_panel_container:
+        origin_state = render_picker(
+            title=t(language, "picker.origin"),
+            picker_kind="origin",
+            state_key=ORIGIN_PICKER_STATE_KEY,
+            input_key="origin_query_input",
+            geocoder=geocoder,
+            language=language,
+        )
+        destination_state = render_picker(
+            title=t(language, "picker.destination"),
+            picker_kind="destination",
+            state_key=DESTINATION_PICKER_STATE_KEY,
+            input_key="destination_query_input",
+            geocoder=geocoder,
+            language=language,
+        )
 
     if saved_result_to_render is not None:
         render_comparison_table(saved_result_to_render, language)

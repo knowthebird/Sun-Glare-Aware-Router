@@ -5,6 +5,7 @@ from datetime import datetime, time
 from streamlit.testing.v1 import AppTest
 
 import app
+from src.geocoding import Geocoder
 from src.models import (
     AnalysisRequest,
     AnalysisResult,
@@ -17,6 +18,23 @@ from src.models import (
     SelectedLocation,
     SunPosition,
 )
+from src.utils import ProviderError
+
+
+class ReverseFailingGeocoder(Geocoder):
+    def geocode(self, query: str) -> None:
+        raise AssertionError("This test should not call geocode")
+
+    def reverse_geocode(self, coordinates: Coordinates) -> None:
+        raise ProviderError("ssl failure")
+
+
+class SearchFailingGeocoder(Geocoder):
+    def geocode(self, query: str) -> None:
+        raise ProviderError("ssl failure")
+
+    def reverse_geocode(self, coordinates: Coordinates) -> None:
+        raise AssertionError("This test should not call reverse_geocode")
 
 
 def make_selected_location(label: str, lat: float, lon: float) -> SelectedLocation:
@@ -159,3 +177,79 @@ def test_peak_risk_summary_uses_clock_time_and_kilometer() -> None:
     )
 
     assert summary == ("09:38", "60.0 km")
+
+
+def test_resolve_picker_confirmation_falls_back_when_reverse_geocoding_fails() -> None:
+    initial_state = LocationPickerState(
+        query_text="Calle Mayor 1, Madrid",
+        provisional_result=None,
+        map_center=Coordinates(lat=40.4168, lon=-3.7038),
+        confirmed_location=None,
+        map_revision=4,
+    )
+    clicked_coordinates = Coordinates(lat=40.4162, lon=-3.7041)
+
+    updated_state, warning_message = app.resolve_picker_confirmation(
+        state=initial_state,
+        query_text=initial_state.query_text,
+        clicked_coordinates=clicked_coordinates,
+        geocoder=ReverseFailingGeocoder(),
+        picker_kind="origin",
+        language="es",
+    )
+
+    assert updated_state.confirmed_location is not None
+    assert updated_state.confirmed_location.coordinates == clicked_coordinates
+    assert updated_state.confirmed_location.label == "Calle Mayor 1, Madrid"
+    assert updated_state.confirmed_location.label_source == "query_text"
+    assert updated_state.map_revision == 5
+    assert warning_message is not None
+    assert "No se pudo obtener" in warning_message
+
+
+def test_resolve_picker_search_keeps_previous_state_when_geocoding_fails() -> None:
+    initial_state = LocationPickerState(
+        query_text="Madrid, Spain",
+        provisional_result=None,
+        map_center=Coordinates(lat=40.4168, lon=-3.7038),
+        confirmed_location=None,
+        map_revision=2,
+    )
+
+    updated_state, error_message = app.resolve_picker_search(
+        state=initial_state,
+        query_text="Madrid, Spain",
+        geocoder=SearchFailingGeocoder(),
+        picker_kind="origin",
+        language="es",
+    )
+
+    assert updated_state == initial_state
+    assert error_message is not None
+    assert "No se pudo buscar" in error_message
+
+
+def test_extract_selected_coordinates_accepts_click_on_provisional_marker() -> None:
+    provisional_coordinates = Coordinates(lat=40.4168, lon=-3.7038)
+    state = LocationPickerState(
+        query_text="Madrid, Spain",
+        provisional_result=app.GeocodeResult(
+            label="Madrid, Comunidad de Madrid, España",
+            coordinates=provisional_coordinates,
+        ),
+        map_center=provisional_coordinates,
+        confirmed_location=None,
+        map_revision=1,
+    )
+
+    selected = app.extract_selected_coordinates(
+        map_data={
+            "last_clicked": None,
+            "last_object_clicked_tooltip": "Origen provisional",
+        },
+        state=state,
+        picker_kind="origin",
+        language="es",
+    )
+
+    assert selected == provisional_coordinates

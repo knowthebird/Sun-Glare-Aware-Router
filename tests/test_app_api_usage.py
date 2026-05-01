@@ -28,7 +28,8 @@ def test_app_uses_two_panel_layout_with_stacked_pickers() -> None:
     source = Path("app.py").read_text(encoding="utf-8")
 
     assert "left_panel, right_panel = st.columns([1, 1])" in source
-    assert "with right_panel:" in source
+    assert "right_panel_container = right_panel.container()" in source
+    assert "with right_panel_container:" in source
     assert 'title=t(language, "picker.origin")' in source
     assert 'title=t(language, "picker.destination")' in source
     assert "controls_col1, controls_col2, controls_col3 = st.columns(" in source

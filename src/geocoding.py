@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Protocol
 
-import requests
 
 from src.cache import RateLimiter, TTLCache
 from src.config import Settings
+from src.http_client import build_http_session
 from src.models import Coordinates, GeocodeResult
 from src.utils import ProviderError
 
@@ -51,7 +51,7 @@ class NominatimGeocoder:
         self.reverse_base_url = reverse_base_url.rstrip("/")
         self.user_agent = user_agent
         self.timeout_s = timeout_s
-        self.session = session or requests.Session()
+        self.session = session or build_http_session()
         self.cache = cache or TTLCache[str, GeocodeResult | None](ttl_s=900.0)
         self.rate_limiter = rate_limiter or RateLimiter(min_interval_s=1.0)
 

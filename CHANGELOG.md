@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Optimized the initial Streamlit load by rendering the lightweight header and planning panel before the map pickers, and by caching Folium picker/result maps so reruns reuse the heavy map objects instead of rebuilding them each time.
+- Hardened map-point confirmation so a reverse-geocoding SSL/provider failure no longer crashes the Streamlit app; the selected point now falls back to the typed label or coordinates and shows a friendly warning instead.
+- Fixed the Spanish reverse-geocoding warning text so it renders the accented characters correctly in Streamlit.
+- Hardened manual place search so a geocoding SSL/provider failure no longer crashes the app; the picker now keeps its previous state and shows a friendly error instead.
+- Updated the shared HTTP client to use the operating system certificate store for HTTPS requests, fixing provider SSL validation issues seen on Windows with Nominatim and other upstream services.
+- Stopped reusing cached Folium map objects across rerenders because the shared map instance could block point selection after a search; interactive maps are now rebuilt with fresh internal IDs each time.
+- Improved picker interaction so clicking directly on the provisional marker now confirms that searched point instead of requiring a nearby empty-map click.
 - Aligned repository metadata with the renamed GitHub repository `Sun-Glare-Aware-Router`.
 - Replaced the fixed-origin glare heuristic with a dynamic segment-by-segment solar analysis that follows route progress over time.
 - Added per-route high-risk duration, high-risk distance, peak-risk timing, and segment risk details for clearer recommendations.
