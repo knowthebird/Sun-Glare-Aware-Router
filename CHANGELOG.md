@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## [0.1.0] - 2026-05-01
+
+- Rewrote the repository documentation so the README explains more clearly what the app is for, how a user interacts with it, where its scoring is useful, and what its main limits are.
 - Optimized the initial Streamlit load by rendering the lightweight header and planning panel before the map pickers, and by caching Folium picker/result maps so reruns reuse the heavy map objects instead of rebuilding them each time.
 - Hardened map-point confirmation so a reverse-geocoding SSL/provider failure no longer crashes the Streamlit app; the selected point now falls back to the typed label or coordinates and shows a friendly warning instead.
 - Fixed the Spanish reverse-geocoding warning text so it renders the accented characters correctly in Streamlit.

@@ -1,41 +1,144 @@
 # Sun-Glare-Aware Router
 
-A public-repo-friendly Streamlit app that compares route alternatives and estimates which route is less likely to put low sun directly in the driver's field of view. The repository is prepared for local use and for deployment on Streamlit Community Cloud.
+`Sun-Glare-Aware Router` is a Streamlit app that compares driving route alternatives and estimates which one is less likely to put low sun directly in front of the driver.
+
+In plain words: you choose an origin, a destination, a date, and a departure time, and the app tries to answer:
+
+> "If I leave at this time, which route is less likely to be uncomfortable or risky because of sun glare?"
+
+The repository is prepared for local use and for deployment on Streamlit Community Cloud.
+
+## Why This Repo Exists
+
+Most route planners optimize for time or distance. This project explores a different question: whether two similar routes may expose the driver to very different sun-glare conditions.
+
+This can be useful for trips such as:
+
+- commuting early in the morning or late in the afternoon,
+- comparing alternative road corridors before leaving,
+- experimenting with route scoring models that include environmental conditions,
+- building a routing prototype for research, demos, or decision support.
+
+The app is not trying to replace a navigation product. It is a lightweight decision aid focused on one specific factor: direct solar glare.
 
 ## What The App Does
 
-- Geocodes an origin and destination.
-- Lets the user refine origin and destination by clicking the exact point on two separate maps.
-- Requests one or more candidate routes from an OSRM-compatible backend.
-- Computes the sun's azimuth and elevation for a chosen date, time, and timezone.
-- Scores each route with a dynamic glare-risk model that evolves along the trip.
-- Explains the recommendation with time-at-risk metrics and highlights the highest-risk segment on the map.
+The app:
 
-## Architecture Overview
+1. geocodes an approximate origin and destination,
+2. lets the user refine both points by clicking the exact place on two separate maps,
+3. requests one or more candidate routes from an OSRM-compatible backend,
+4. computes the sun position for the selected departure date, time, and timezone,
+5. evaluates glare risk along each route as the trip progresses,
+6. recommends the route with the lowest estimated glare impact,
+7. explains the result with summary metrics and a highlighted high-risk segment.
 
-- `app.py`: Streamlit UI, guided location picking, orchestration, and result rendering.
-- `src/config.py`: Environment-driven settings and timezone helpers.
-- `src/geocoding.py`: Swappable geocoder interface plus default Nominatim client.
-- `src/pickers.py`: State transitions for origin/destination pickers and route-generation readiness.
-- `src/routing.py`: Swappable router interface plus default OSRM-compatible client.
-- `src/solar.py`: Timezone-aware datetime handling and Astral sun position lookup.
-- `src/scoring.py`: Isolated glare scoring and route recommendation logic.
-- `src/mapview.py`: Folium map assembly for Streamlit.
-- `src/cache.py`: Small in-memory TTL cache and polite rate limiter.
-- `src/utils.py`: Lightweight geometry, formatting, and shared helpers.
+The interface also includes:
+
+- an ES/EN language toggle,
+- a route comparison table,
+- a debug panel with provider and scoring details,
+- a pre-filled demo trip from Madrid to Burgos so the app is easy to try.
+
+## How The Scoring Works
+
+The current model is intentionally simple enough to understand and modify:
+
+1. Each route geometry is split into segments.
+2. Trip duration is distributed across those segments according to segment length.
+3. The app recomputes the sun position near the midpoint of every segment at the estimated time the driver would reach it.
+4. It compares segment direction with the sun azimuth.
+5. It increases the penalty when the sun is low and reduces it to zero when the sun is below the horizon.
+6. It aggregates those segment penalties into a normalized glare score between `0` and `100`.
+
+Besides the final score, the app also reports:
+
+- high-risk time,
+- high-risk distance,
+- peak-risk moment,
+- approximate kilometer where peak risk occurs,
+- the highest-risk segment on the map.
+
+## What This Repo Is Good For
+
+This repository is a good fit if you want:
+
+- a small, readable Streamlit app,
+- a public-demo-friendly routing prototype,
+- a starting point for route scoring experiments,
+- provider swapping through configuration instead of UI rewrites,
+- a project that works locally and can be deployed easily.
+
+## What This Repo Is Not
+
+This repository is not:
+
+- a production navigation system,
+- a traffic-aware route optimizer,
+- a safety guarantee,
+- a full physical visibility model.
+
+It does not model traffic, weather, buildings, trees, hills, windshield properties, vehicle orientation details beyond route bearing, or turn-by-turn timing precision.
+
+## Typical User Flow
+
+1. Open the app.
+2. Keep the demo trip or search for a new origin and destination.
+3. Click the exact origin point on the first map.
+4. Click the exact destination point on the second map.
+5. Choose the departure date, time, and timezone.
+6. Generate routes.
+7. Compare the suggested route, the alternatives, and the highlighted risk zone.
+
+This makes the app more precise than a pure text-input workflow because the final analysis uses the coordinates confirmed on the maps.
+
+## Repository Structure
+
+- `app.py`: Streamlit UI and orchestration.
+- `src/config.py`: environment-driven settings and timezone helpers.
+- `src/geocoding.py`: pluggable geocoder interface and default Nominatim client.
+- `src/routing.py`: pluggable router interface and default OSRM-compatible client.
+- `src/solar.py`: timezone-aware sun-position lookup.
+- `src/scoring.py`: glare scoring and route ranking.
+- `src/pickers.py`: origin/destination picker state transitions.
+- `src/mapview.py`: Folium map rendering for pickers and results.
+- `src/cache.py`: small TTL cache and polite rate limiting.
+- `src/utils.py`: shared helpers for geometry, formatting, and logging.
+- `tests/`: unit tests for scoring, providers, map rendering, UI behavior, and state handling.
 
 ## Local Setup
 
-1. Create and activate a virtual environment.
-2. Install the app and dev dependencies:
+This project targets Python `3.11+`.
+
+1. Create the virtual environment:
+
+```bash
+python -m venv .venv
+```
+
+2. Activate it:
+
+Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Linux/macOS bash:
+
+```bash
+source .venv/bin/activate
+```
+
+3. Install the app with development dependencies:
 
 ```bash
 python -m pip install -e .[dev]
 ```
 
-3. Optional: copy `.env.example` to `.env` if you want to override provider settings locally.
+4. Optional: copy `.env.example` to `.env` if you want to override provider settings locally.
 
-`src/config.py` loads `.env` automatically when you run the app from the repository root.
+`src/config.py` loads `.env` automatically when the app runs from the repository root.
 
 ## Run Locally
 
@@ -43,11 +146,13 @@ python -m pip install -e .[dev]
 streamlit run app.py
 ```
 
-Run the command from the repository root so local paths behave the same way they do on Streamlit Community Cloud.
+Run the command from the repository root.
 
-The default UI is pre-filled with a demo trip from Madrid to Burgos at 09:00 in `Europe/Madrid` time so you can try the app quickly. You refine both points by searching approximately and then clicking the exact place on each map.
+By default, the app opens with a demo trip from Madrid to Burgos at `09:00` in `Europe/Madrid`, which makes it easy to test the workflow immediately.
 
-## Environment Variables
+## Configuration
+
+The app is configured through environment variables.
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
@@ -59,90 +164,80 @@ The default UI is pre-filled with a demo trip from Madrid to Burgos at 09:00 in 
 | `SUNROUTER_ROUTER_BASE_URL` | OSRM-compatible route endpoint root | `https://router.project-osrm.org/route/v1` |
 | `SUNROUTER_ROUTER_MIN_INTERVAL_S` | Minimum delay between routing calls | `1.0` |
 | `SUNROUTER_ROUTING_PROFILE` | Routing profile name | `driving` |
-| `SUNROUTER_MAX_ALTERNATIVES` | Max routes kept from provider output | `3` |
-| `SUNROUTER_USER_AGENT` | Request header for public providers | `sun-glare-router-mvp/0.1` |
+| `SUNROUTER_MAX_ALTERNATIVES` | Maximum number of candidate routes kept | `3` |
+| `SUNROUTER_USER_AGENT` | Request header for public providers | `sun-glare-router/0.1.0` |
 | `SUNROUTER_HTTP_TIMEOUT_S` | HTTP timeout in seconds | `10` |
-| `SUNROUTER_CACHE_TTL_S` | In-memory TTL cache duration in seconds | `900` |
-| `SUNROUTER_DEFAULT_TIMEZONE` | Default IANA timezone shown in the UI | `Europe/Madrid` |
+| `SUNROUTER_CACHE_TTL_S` | In-memory cache duration in seconds | `900` |
+| `SUNROUTER_DEFAULT_TIMEZONE` | Default IANA timezone in the UI | `Europe/Madrid` |
 | `SUNROUTER_LOG_LEVEL` | Application and provider log verbosity | `INFO` |
+
+## Provider Notes
+
+The default configuration uses public OpenStreetMap ecosystem services:
+
+- Nominatim for geocoding and reverse geocoding,
+- an OSRM-compatible endpoint for routing,
+- OpenStreetMap-based tiles for map display.
+
+That is convenient for local demos and light experimentation, but it is not suitable for heavy production traffic. For more demanding use cases, point the app to your own infrastructure or to supported third-party services with appropriate usage terms.
+
+## Swapping Providers
+
+The project separates UI logic from provider implementations, so changing infrastructure does not require rewriting the app flow.
+
+Examples:
+
+- point `SUNROUTER_ROUTER_BASE_URL` to a self-hosted OSRM instance while keeping `SUNROUTER_ROUTER_PROVIDER=osrm`,
+- replace the geocoder by implementing the `Geocoder` protocol and updating `build_geocoder`,
+- replace the router by implementing the `Router` protocol and updating `build_router`.
 
 ## Streamlit Community Cloud Deployment
 
-The repository includes the files Streamlit Community Cloud expects most often:
+The repository already includes the files Streamlit Community Cloud usually expects:
 
-- `app.py` as the app entrypoint at the repository root.
-- `requirements.txt` at the repository root.
-- `.streamlit/config.toml` for app configuration.
-- `.streamlit/secrets.toml.example` as a safe template for cloud secrets.
+- `app.py` at the repository root,
+- `requirements.txt` at the repository root,
+- `.streamlit/config.toml`,
+- `.streamlit/secrets.toml.example`.
 
 To deploy:
 
-1. Push the repository to GitHub as a public repository.
-2. In Streamlit Community Cloud, create a new app and select:
-   - Repository: your GitHub repository
-   - Branch: the branch you want to deploy
-   - Main file path: `app.py`
-3. Optional: in the app's advanced settings, paste root-level values based on `.streamlit/secrets.toml.example` into the Secrets field if you want to override any defaults.
-4. Save and deploy.
+1. Push the repository to GitHub.
+2. Create a new app in Streamlit Community Cloud.
+3. Select the repository, branch, and `app.py` as the main file.
+4. If needed, copy values from `.streamlit/secrets.toml.example` into the Streamlit Secrets manager.
+5. Deploy.
 
-The Streamlit docs currently recommend keeping `requirements.txt` at the root and placing custom configuration in `.streamlit/config.toml`. They also recommend passing secrets through the Secrets manager instead of committing them to the repository.
-
-Local `.env` files and project-level `.streamlit/secrets.toml` files should stay out of git. Only commit `.env.example` and `.streamlit/secrets.toml.example`.
-
-## How Glare Scoring Works
-
-The current scoring model is still lightweight, but it is no longer a single-point estimate:
-
-1. The user searches an approximate origin and destination, then confirms both points by clicking on two separate maps.
-2. Each route geometry is split into line segments.
-3. Segment duration is estimated by distributing the route duration across the geometry by segment length.
-4. The sun position is recomputed at the midpoint of every segment using the estimated time when the driver would reach that part of the route.
-5. Segment bearing is compared with the local sun azimuth using a smooth cosine-based alignment penalty.
-6. The penalty is scaled up when the sun is low and scaled to zero when the sun is below the horizon.
-7. Segment penalties are weighted by segment length and normalized to a `0-100` route glare score.
-8. The app also reports high-risk time, high-risk distance, peak-risk timing, and the highest-risk segment for the recommended route.
-
-The heuristic is easy to replace later because scoring is isolated in `src/scoring.py`.
-
-## Limitations Of The MVP
-
-- Public demo providers may return only one route for some trips.
-- Segment timing is estimated from total route duration; the model does not use turn-by-turn travel times.
-- Traffic, obstructions, weather, road grade, and windshield orientation are not modeled.
-- The score is a routing aid, not a safety guarantee.
-- The default public Nominatim and OSRM endpoints are suitable for demos and light use, not for heavy public traffic.
-
-## Attribution And Usage Notes
-
-- The default map tiles use OpenStreetMap and must retain visible attribution.
-- Default demo geocoding and routing endpoints are for light/demo usage only. Heavy or production traffic should use self-hosted or contractually supported infrastructure.
-- The repository code is MIT-licensed, but OpenStreetMap data terms and public service usage policies are separate and still apply.
-
-## Swapping Providers Later
-
-The app is designed so you can replace providers through environment variables and factory wiring:
-
-- Point `SUNROUTER_ROUTER_BASE_URL` at a self-hosted OSRM instance and keep `SUNROUTER_ROUTER_PROVIDER=osrm`.
-- Replace the default geocoder by implementing the `Geocoder` protocol and updating `build_geocoder`.
-- Replace the default router by implementing the `Router` protocol and updating `build_router`.
-
-This keeps the UI and glare scoring stable while letting you swap infrastructure later.
+Local `.env` files and project-level `.streamlit/secrets.toml` files should stay out of git. Only templates such as `.env.example` and `.streamlit/secrets.toml.example` should be committed.
 
 ## Testing
 
-Run the unit tests with:
+Run the test suite with:
 
 ```bash
 python -m pytest
 ```
 
-Before finishing Python work, the project also expects:
+Useful quality checks for development:
 
 ```bash
 ruff check . --fix
 ruff format .
+pyright
 ```
 
-If `pyright` is available in your environment, run it too after `pytest`.
+The automated tests avoid live network calls and focus on the parts that matter most in this project: geometry, scoring, provider parsing, state handling, and UI rendering behavior.
 
-The test suite avoids live network calls and focuses on geometry, scoring, UI rendering, and provider parsing.
+## Limitations
+
+- Public routing providers may return only one route for some trips.
+- Segment timing is estimated from total duration rather than turn-by-turn timings.
+- The model focuses on direct solar alignment, not full visual obstruction.
+- Results are advisory and should not be treated as a driving safety guarantee.
+
+## License And Attribution
+
+- The repository code is released under the MIT License.
+- Runtime dependency notices are listed in `THIRD_PARTY_NOTICES.md`.
+- OpenStreetMap data terms and public service usage policies still apply separately.
+- Map attribution must remain visible when OpenStreetMap-derived tiles are used.

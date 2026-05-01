@@ -58,7 +58,7 @@ def load_settings() -> Settings:
         ),
         router_min_interval_s=_env_float("SUNROUTER_ROUTER_MIN_INTERVAL_S", 1.0),
         routing_profile=os.getenv("SUNROUTER_ROUTING_PROFILE", "driving"),
-        user_agent=os.getenv("SUNROUTER_USER_AGENT", "sun-glare-router-mvp/0.1"),
+        user_agent=os.getenv("SUNROUTER_USER_AGENT", "sun-glare-router/0.1.0"),
         http_timeout_s=_env_float("SUNROUTER_HTTP_TIMEOUT_S", 10.0),
         cache_ttl_s=_env_float("SUNROUTER_CACHE_TTL_S", 900.0),
         max_alternatives=_env_int("SUNROUTER_MAX_ALTERNATIVES", 3),
