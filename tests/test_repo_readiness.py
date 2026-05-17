@@ -42,10 +42,10 @@ def test_repo_includes_streamlit_cloud_support_files() -> None:
     assert Path(".streamlit/secrets.toml.example").is_file()
 
 
-def test_repo_includes_github_security_automation_files() -> None:
+def test_repo_includes_github_automation_files_without_codeql_advanced_setup() -> None:
     assert Path(".github/dependabot.yml").is_file()
     assert Path(".github/workflows/ci.yml").is_file()
-    assert Path(".github/workflows/codeql.yml").is_file()
+    assert not Path(".github/workflows/codeql.yml").is_file()
 
 
 def test_readme_mentions_streamlit_community_cloud_and_secrets() -> None:

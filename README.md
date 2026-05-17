@@ -216,7 +216,9 @@ This repo is prepared to work with GitHub security features:
 
 - Dependabot checks Python dependencies and GitHub Actions every week.
 - CI runs Ruff, Pyright, and the test suite on Windows and Linux pull requests.
-- CodeQL scans Python code on pull requests, pushes to `main`, and a weekly schedule.
+- CodeQL should use GitHub's default setup, configured from the GitHub security settings page.
+
+Do not add a `.github/workflows/codeql.yml` workflow while CodeQL default setup is enabled. GitHub treats that as an advanced CodeQL configuration and rejects the uploaded scan results when both modes are active.
 
 For Streamlit Community Cloud:
 
