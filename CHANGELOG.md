@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added GitHub security automation for Dependabot, CI, and CodeQL so dependency updates, static checks, typing, tests, and security analysis run through GitHub.
+- Hardened runtime configuration validation for provider URLs, routing profiles, HTTP timeouts, cache duration, and route alternative limits, with friendly Streamlit errors for invalid cloud settings.
+- Documented security expectations for Streamlit Community Cloud secrets and provider URLs.
+
 ## [0.1.0] - 2026-05-01
 
 - Rewrote the repository documentation so the README explains more clearly what the app is for, how a user interacts with it, where its scoring is useful, and what its main limits are.

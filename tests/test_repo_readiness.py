@@ -42,6 +42,12 @@ def test_repo_includes_streamlit_cloud_support_files() -> None:
     assert Path(".streamlit/secrets.toml.example").is_file()
 
 
+def test_repo_includes_github_security_automation_files() -> None:
+    assert Path(".github/dependabot.yml").is_file()
+    assert Path(".github/workflows/ci.yml").is_file()
+    assert Path(".github/workflows/codeql.yml").is_file()
+
+
 def test_readme_mentions_streamlit_community_cloud_and_secrets() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 

@@ -9,7 +9,7 @@ import folium
 import streamlit as st
 from streamlit_folium import st_folium
 
-from src.config import Settings, load_settings, supported_timezones
+from src.config import ConfigError, Settings, load_settings, supported_timezones
 from src.geocoding import Geocoder, build_geocoder
 from src.i18n import t
 from src.mapview import build_picker_map, build_route_map
@@ -804,7 +804,12 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    settings = load_settings()
+    try:
+        settings = load_settings()
+    except ConfigError as exc:
+        st.error(f"Configuration error: {exc}")
+        st.stop()
+
     configure_logging(settings.log_level)
     geocoder = get_geocoder(settings)
     router = get_router(settings)

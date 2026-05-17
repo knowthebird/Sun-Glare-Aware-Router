@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 from zoneinfo import available_timezones
 
 from dotenv import load_dotenv
+
+LOCAL_HTTP_HOSTS = {"localhost", "127.0.0.1", "::1"}
+ROUTING_PROFILE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+
+
+class ConfigError(ValueError):
+    """Raised when environment configuration is unsafe or unusable."""
 
 
 @dataclass(frozen=True)
@@ -28,40 +37,136 @@ class Settings:
 
 def _env_float(name: str, default: float) -> float:
     raw_value = os.getenv(name)
-    return float(raw_value) if raw_value is not None else default
+    if raw_value is None:
+        return default
+    try:
+        return float(raw_value)
+    except ValueError as exc:
+        raise ConfigError(f"{name} must be a number.") from exc
 
 
 def _env_int(name: str, default: int) -> int:
     raw_value = os.getenv(name)
-    return int(raw_value) if raw_value is not None else default
+    if raw_value is None:
+        return default
+    try:
+        return int(raw_value)
+    except ValueError as exc:
+        raise ConfigError(f"{name} must be an integer.") from exc
+
+
+def _require_range(name: str, value: float, lower: float, upper: float) -> float:
+    if lower <= value <= upper:
+        return value
+    raise ConfigError(f"{name} must be between {lower:g} and {upper:g}.")
+
+
+def _require_int_range(name: str, value: int, lower: int, upper: int) -> int:
+    if lower <= value <= upper:
+        return value
+    raise ConfigError(f"{name} must be between {lower} and {upper}.")
+
+
+def _validate_provider_url(name: str, value: str) -> str:
+    clean_value = value.strip()
+    parsed_url = urlparse(clean_value)
+    if parsed_url.scheme not in {"https", "http"} or not parsed_url.netloc:
+        raise ConfigError(f"{name} must be an absolute http or https URL.")
+    if parsed_url.username is not None or parsed_url.password is not None:
+        raise ConfigError(f"{name} must not include credentials in the URL.")
+    if parsed_url.scheme == "http" and parsed_url.hostname not in LOCAL_HTTP_HOSTS:
+        raise ConfigError(f"{name} must use https unless it points to localhost.")
+    return clean_value
+
+
+def _validate_routing_profile(value: str) -> str:
+    clean_value = value.strip()
+    if ROUTING_PROFILE_PATTERN.fullmatch(clean_value) is None:
+        raise ConfigError(
+            "SUNROUTER_ROUTING_PROFILE may only contain letters, numbers, "
+            "underscores, and hyphens."
+        )
+    return clean_value
+
+
+def _validate_user_agent(value: str) -> str:
+    clean_value = value.strip()
+    if not clean_value:
+        raise ConfigError("SUNROUTER_USER_AGENT must not be empty.")
+    if len(clean_value) > 256:
+        raise ConfigError("SUNROUTER_USER_AGENT must be 256 characters or fewer.")
+    return clean_value
 
 
 def load_settings() -> Settings:
     load_dotenv(dotenv_path=Path.cwd() / ".env", override=False)
     timezone_name = os.getenv("SUNROUTER_DEFAULT_TIMEZONE", "Europe/Madrid")
+    http_timeout_s = _require_range(
+        "SUNROUTER_HTTP_TIMEOUT_S",
+        _env_float("SUNROUTER_HTTP_TIMEOUT_S", 10.0),
+        1.0,
+        60.0,
+    )
+    cache_ttl_s = _require_range(
+        "SUNROUTER_CACHE_TTL_S",
+        _env_float("SUNROUTER_CACHE_TTL_S", 900.0),
+        0.0,
+        86_400.0,
+    )
+    geocoder_min_interval_s = _require_range(
+        "SUNROUTER_GEOCODER_MIN_INTERVAL_S",
+        _env_float("SUNROUTER_GEOCODER_MIN_INTERVAL_S", 1.0),
+        0.0,
+        60.0,
+    )
+    router_min_interval_s = _require_range(
+        "SUNROUTER_ROUTER_MIN_INTERVAL_S",
+        _env_float("SUNROUTER_ROUTER_MIN_INTERVAL_S", 1.0),
+        0.0,
+        60.0,
+    )
+    max_alternatives = _require_int_range(
+        "SUNROUTER_MAX_ALTERNATIVES",
+        _env_int("SUNROUTER_MAX_ALTERNATIVES", 3),
+        1,
+        5,
+    )
 
     return Settings(
         geocoder_provider=os.getenv("SUNROUTER_GEOCODER_PROVIDER", "nominatim").lower(),
-        geocoder_base_url=os.getenv(
+        geocoder_base_url=_validate_provider_url(
             "SUNROUTER_GEOCODER_BASE_URL",
-            "https://nominatim.openstreetmap.org/search",
+            os.getenv(
+                "SUNROUTER_GEOCODER_BASE_URL",
+                "https://nominatim.openstreetmap.org/search",
+            ),
         ),
-        reverse_geocoder_base_url=os.getenv(
+        reverse_geocoder_base_url=_validate_provider_url(
             "SUNROUTER_REVERSE_GEOCODER_BASE_URL",
-            "https://nominatim.openstreetmap.org/reverse",
+            os.getenv(
+                "SUNROUTER_REVERSE_GEOCODER_BASE_URL",
+                "https://nominatim.openstreetmap.org/reverse",
+            ),
         ),
-        geocoder_min_interval_s=_env_float("SUNROUTER_GEOCODER_MIN_INTERVAL_S", 1.0),
+        geocoder_min_interval_s=geocoder_min_interval_s,
         router_provider=os.getenv("SUNROUTER_ROUTER_PROVIDER", "osrm").lower(),
-        router_base_url=os.getenv(
+        router_base_url=_validate_provider_url(
             "SUNROUTER_ROUTER_BASE_URL",
-            "https://router.project-osrm.org/route/v1",
+            os.getenv(
+                "SUNROUTER_ROUTER_BASE_URL",
+                "https://router.project-osrm.org/route/v1",
+            ),
         ),
-        router_min_interval_s=_env_float("SUNROUTER_ROUTER_MIN_INTERVAL_S", 1.0),
-        routing_profile=os.getenv("SUNROUTER_ROUTING_PROFILE", "driving"),
-        user_agent=os.getenv("SUNROUTER_USER_AGENT", "sun-glare-router/0.1.0"),
-        http_timeout_s=_env_float("SUNROUTER_HTTP_TIMEOUT_S", 10.0),
-        cache_ttl_s=_env_float("SUNROUTER_CACHE_TTL_S", 900.0),
-        max_alternatives=_env_int("SUNROUTER_MAX_ALTERNATIVES", 3),
+        router_min_interval_s=router_min_interval_s,
+        routing_profile=_validate_routing_profile(
+            os.getenv("SUNROUTER_ROUTING_PROFILE", "driving")
+        ),
+        user_agent=_validate_user_agent(
+            os.getenv("SUNROUTER_USER_AGENT", "sun-glare-router/0.1.0")
+        ),
+        http_timeout_s=http_timeout_s,
+        cache_ttl_s=cache_ttl_s,
+        max_alternatives=max_alternatives,
         default_timezone=timezone_name
         if timezone_name in available_timezones()
         else "UTC",

@@ -210,6 +210,23 @@ To deploy:
 
 Local `.env` files and project-level `.streamlit/secrets.toml` files should stay out of git. Only templates such as `.env.example` and `.streamlit/secrets.toml.example` should be committed.
 
+## Security Notes
+
+This repo is prepared to work with GitHub security features:
+
+- Dependabot checks Python dependencies and GitHub Actions every week.
+- CI runs Ruff, Pyright, and the test suite on Windows and Linux pull requests.
+- CodeQL scans Python code on pull requests, pushes to `main`, and a weekly schedule.
+
+For Streamlit Community Cloud:
+
+- keep real secrets only in the Streamlit Secrets manager,
+- keep `.env` and `.streamlit/secrets.toml` local and uncommitted,
+- prefer `https` provider URLs for deployed apps,
+- use plain `http` only for local development endpoints such as `localhost`.
+
+The app validates provider URLs, routing profile names, request timeouts, cache duration, and route-alternative limits when it starts. If a deployment setting is unsafe or unusable, Streamlit shows a configuration error instead of making a risky request.
+
 ## Testing
 
 Run the test suite with:

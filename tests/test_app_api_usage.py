@@ -70,3 +70,11 @@ def test_app_uses_column_config_for_consistent_comparison_widths() -> None:
 
     assert "column_config={" in source
     assert "st.column_config.TextColumn(" in source
+
+
+def test_app_handles_configuration_errors_with_streamlit_stop() -> None:
+    source = Path("app.py").read_text(encoding="utf-8")
+
+    assert "from src.config import ConfigError" in source
+    assert "except ConfigError as exc:" in source
+    assert "st.stop()" in source
