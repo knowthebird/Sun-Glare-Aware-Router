@@ -23,6 +23,11 @@ updates:
           - "pytest"
           - "ruff"
           - "pyright"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -32,3 +37,8 @@ updates:
       time: "08:15"
       timezone: "Europe/Madrid"
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
