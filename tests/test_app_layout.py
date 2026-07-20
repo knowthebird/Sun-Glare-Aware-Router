@@ -22,20 +22,23 @@ def test_app_renders_information_and_main_panel_controls() -> None:
     at.run()
 
     markdown_text = " ".join(item.value for item in at.markdown)
+    warning_text = " ".join(item.value for item in at.warning)
     button_labels = [getattr(button.proto, "label", "") for button in at.button]
     subheaders = [item.value for item in at.subheader]
 
-    assert "Información" in _expander_labels(at)
-    assert "riesgo de deslumbramiento" in markdown_text.lower()
-    assert "cómo funciona" in markdown_text.lower()
-    assert "limitaciones" in markdown_text.lower()
+    assert "Information" in _expander_labels(at)
+    assert "glare risk" in markdown_text.lower()
+    assert "how it works" in markdown_text.lower()
+    assert "limitations" in markdown_text.lower()
+    assert "not a driving-safety guarantee" in warning_text
     assert len(at.sidebar.text_input) == 0
-    assert "Origen" in subheaders
-    assert "Destino" in subheaders
-    assert "Generar rutas" in button_labels
+    assert "Origin" in subheaders
+    assert "Destination" in subheaders
+    assert "Get route alternatives" in button_labels
+    assert "Reverse origin and destination" in button_labels
 
 
-def test_app_defaults_to_spanish_language_selector() -> None:
+def test_app_defaults_to_english_language_selector() -> None:
     at = AppTest.from_file("app.py")
 
     at.run()
@@ -44,10 +47,10 @@ def test_app_defaults_to_spanish_language_selector() -> None:
         getattr(widget.proto, "label", ""): widget.value for widget in at.radio
     }
 
-    assert radio_values["Idioma / Language"] == "ES"
+    assert radio_values["Idioma / Language"] == "EN"
 
 
-def test_generate_routes_is_disabled_until_both_points_are_confirmed() -> None:
+def test_generate_routes_is_enabled_for_the_first_run_demo_trip() -> None:
     at = AppTest.from_file("app.py")
 
     at.run()
@@ -55,7 +58,7 @@ def test_generate_routes_is_disabled_until_both_points_are_confirmed() -> None:
     generate_button = next(
         button
         for button in at.button
-        if getattr(button.proto, "label", "") == "Generar rutas"
+        if getattr(button.proto, "label", "") == "Get route alternatives"
     )
 
-    assert generate_button.proto.disabled is True
+    assert generate_button.proto.disabled is False

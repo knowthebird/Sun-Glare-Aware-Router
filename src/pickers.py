@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, time
 
 from src.models import (
+    AddressSuggestion,
     AnalysisRequest,
     Coordinates,
     GeocodeResult,
@@ -36,6 +37,24 @@ def apply_picker_search_result(
         map_center=geocoded_result.coordinates
         if geocoded_result is not None
         else state.map_center,
+        confirmed_location=None,
+        map_revision=state.map_revision + 1,
+    )
+
+
+def apply_picker_suggestion_result(
+    state: LocationPickerState,
+    suggestion: AddressSuggestion,
+) -> LocationPickerState:
+    provisional_result = GeocodeResult(
+        label=suggestion.label,
+        coordinates=suggestion.coordinates,
+        provider_id=suggestion.provider_id,
+    )
+    return LocationPickerState(
+        query_text=suggestion.label,
+        provisional_result=provisional_result,
+        map_center=suggestion.coordinates,
         confirmed_location=None,
         map_revision=state.map_revision + 1,
     )

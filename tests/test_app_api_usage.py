@@ -32,7 +32,9 @@ def test_app_uses_two_panel_layout_with_stacked_pickers() -> None:
     assert "with right_panel_container:" in source
     assert 'title=t(language, "picker.origin")' in source
     assert 'title=t(language, "picker.destination")' in source
-    assert "controls_col1, controls_col2, controls_col3 = st.columns(" in source
+    assert "def render_time_window_planner(" in source
+    assert "controls_row_one = st.columns(" in source
+    assert "controls_row_two = st.columns(" in source
 
 
 def test_app_uses_forms_so_enter_submits_picker_searches() -> None:
@@ -42,11 +44,13 @@ def test_app_uses_forms_so_enter_submits_picker_searches() -> None:
     assert 'st.form_submit_button(t(language, "picker.search")' in source
 
 
-def test_app_renders_comparison_table_below_both_columns() -> None:
+def test_app_renders_time_window_results() -> None:
     source = Path("app.py").read_text(encoding="utf-8")
 
-    assert "def render_comparison_table(" in source
-    assert "render_comparison_table(saved_result_to_render, language)" in source
+    assert "def render_time_window_result(" in source
+    assert "candidate_result_rows(evaluation, language)" in source
+    assert "glare_chart_rows(evaluation)" in source
+    assert "time_window.inspect_candidate" in source
 
 
 def test_app_injects_shared_styles_for_a_cleaner_layout() -> None:
@@ -61,7 +65,7 @@ def test_app_defines_language_state_and_translation_usage() -> None:
     source = Path("app.py").read_text(encoding="utf-8")
 
     assert 'LANGUAGE_STATE_KEY = "sunrouter_language"' in source
-    assert 'st.session_state[LANGUAGE_STATE_KEY] = "es"' in source
+    assert 'st.session_state[LANGUAGE_STATE_KEY] = "en"' in source
     assert "from src.i18n import t" in source
 
 

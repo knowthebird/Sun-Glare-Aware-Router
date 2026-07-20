@@ -45,3 +45,29 @@ def test_load_settings_rejects_unreasonable_numeric_values(monkeypatch) -> None:
 
     with pytest.raises(ConfigError, match="SUNROUTER_HTTP_TIMEOUT_S"):
         load_settings()
+
+
+def test_load_settings_includes_default_photon_suggestion_configuration() -> None:
+    settings = load_settings()
+
+    assert settings.suggestions_enabled is True
+    assert settings.suggestion_provider == "photon"
+    assert settings.suggestion_endpoint_url == "https://photon.komoot.io/api"
+    assert settings.suggestion_min_query_length == 3
+    assert settings.suggestion_max_results == 5
+    assert settings.suggestion_debounce_ms == 350
+
+
+def test_load_settings_allows_suggestions_to_be_disabled(monkeypatch) -> None:
+    monkeypatch.setenv("SUNROUTER_SUGGESTIONS_ENABLED", "false")
+
+    settings = load_settings()
+
+    assert settings.suggestions_enabled is False
+
+
+def test_load_settings_rejects_invalid_suggestion_endpoint(monkeypatch) -> None:
+    monkeypatch.setenv("SUNROUTER_SUGGESTION_ENDPOINT_URL", "ftp://example.test/api")
+
+    with pytest.raises(ConfigError, match="SUNROUTER_SUGGESTION_ENDPOINT_URL"):
+        load_settings()

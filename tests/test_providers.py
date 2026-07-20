@@ -1,7 +1,11 @@
 from dataclasses import dataclass
 
+import pytest
+
+from src.cache import TTLCache
+from src.geocoding import DisabledSuggestionProvider, NominatimGeocoder
+from src.geocoding import PhotonSuggestionProvider
 from src.http_client import SystemSSLContextAdapter
-from src.geocoding import NominatimGeocoder
 from src.models import Coordinates
 from src.routing import OSRMRouter
 
@@ -45,6 +49,22 @@ class FakeSession:
         return FakeResponse(self.payload)
 
 
+class FailingSession:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: dict[str, object],
+        timeout: float,
+        headers: dict[str, str],
+    ) -> FakeResponse:
+        self.calls += 1
+        raise TimeoutError("timed out")
+
+
 class SequenceFakeSession:
     def __init__(self, payloads: list[object]) -> None:
         self.payloads = payloads
@@ -70,6 +90,150 @@ class SequenceFakeSession:
         )
         index = min(len(self.calls) - 1, len(self.payloads) - 1)
         return FakeResponse(self.payloads[index])
+
+
+def make_photon_provider(
+    payload: object,
+    *,
+    min_query_length: int = 3,
+    max_results: int = 5,
+) -> tuple[PhotonSuggestionProvider, FakeSession]:
+    session = FakeSession(payload)
+    provider = PhotonSuggestionProvider(
+        endpoint_url="https://example.test/api",
+        user_agent="sun-router-test",
+        timeout_s=5.0,
+        min_query_length=min_query_length,
+        max_results=max_results,
+        session=session,
+        cache=TTLCache(ttl_s=60.0),
+    )
+    return provider, session
+
+
+def test_photon_suggestions_parse_labels_coordinates_and_provider_ids() -> None:
+    provider, session = make_photon_provider(
+        {
+            "features": [
+                {
+                    "properties": {
+                        "name": "Berlin Olympic Stadium",
+                        "street": "Olympischer Platz",
+                        "housenumber": "3",
+                        "postcode": "14053",
+                        "city": "Berlin",
+                        "state": "Berlin",
+                        "country": "Germany",
+                        "osm_type": "W",
+                        "osm_id": 38862723,
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [13.239514674078611, 52.51467945],
+                    },
+                }
+            ]
+        }
+    )
+
+    suggestions = provider.suggest("Berlin Oly")
+
+    assert len(suggestions) == 1
+    assert suggestions[0].label == (
+        "Berlin Olympic Stadium, 3 Olympischer Platz, 14053, Berlin, Germany"
+    )
+    assert suggestions[0].coordinates == Coordinates(
+        lat=52.51467945,
+        lon=13.239514674078611,
+    )
+    assert suggestions[0].provider_id == "W:38862723"
+    assert session.calls[0][1]["params"] == {"q": "Berlin Oly", "limit": 5}
+
+
+def test_photon_suggestions_respect_minimum_query_length() -> None:
+    provider, session = make_photon_provider({"features": []}, min_query_length=4)
+
+    assert provider.suggest("abc") == []
+    assert session.calls == []
+
+
+def test_photon_suggestions_respect_result_limit() -> None:
+    payload = {
+        "features": [
+            {
+                "properties": {"name": f"Place {index}", "country": "Testland"},
+                "geometry": {"coordinates": [float(index), float(index + 1)]},
+            }
+            for index in range(4)
+        ]
+    }
+    provider, _session = make_photon_provider(payload, max_results=2)
+
+    suggestions = provider.suggest("Place")
+
+    assert [suggestion.label for suggestion in suggestions] == [
+        "Place 0, Testland",
+        "Place 1, Testland",
+    ]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"features": []},
+        {"features": [{"properties": {}, "geometry": {"coordinates": []}}]},
+        {"features": [{"properties": {"name": "Bad"}, "geometry": {}}]},
+    ],
+)
+def test_photon_suggestions_handle_empty_and_malformed_responses(
+    payload: object,
+) -> None:
+    provider, _session = make_photon_provider(payload)
+
+    assert provider.suggest("Bad") == []
+
+
+def test_photon_suggestion_failure_is_cached_to_avoid_repeated_retries() -> None:
+    session = FailingSession()
+    provider = PhotonSuggestionProvider(
+        endpoint_url="https://example.test/api",
+        user_agent="sun-router-test",
+        timeout_s=0.1,
+        min_query_length=3,
+        max_results=5,
+        session=session,
+        cache=TTLCache(ttl_s=60.0),
+    )
+
+    with pytest.raises(Exception, match="Suggestion request failed"):
+        provider.suggest("Madrid")
+
+    assert provider.suggest("Madrid") == []
+    assert session.calls == 1
+
+
+def test_photon_suggestions_use_cache_for_repeated_queries() -> None:
+    provider, session = make_photon_provider(
+        {
+            "features": [
+                {
+                    "properties": {"name": "Madrid", "country": "Spain"},
+                    "geometry": {"coordinates": [-3.7038, 40.4168]},
+                }
+            ]
+        }
+    )
+
+    first = provider.suggest("Madrid")
+    second = provider.suggest("Madrid")
+
+    assert first == second
+    assert len(session.calls) == 1
+
+
+def test_disabled_suggestion_provider_returns_empty_results() -> None:
+    assert DisabledSuggestionProvider().suggest("Madrid") == []
 
 
 def test_nominatim_geocoder_returns_first_result() -> None:
@@ -191,6 +355,41 @@ def test_osrm_router_parses_geojson_routes() -> None:
     assert routes[0].metrics.distance_m == 1200.0
     assert routes[0].geometry[0] == Coordinates(lat=40.4, lon=-3.7)
     assert routes[1].geometry[-1] == Coordinates(lat=40.42, lon=-3.68)
+
+
+def test_osrm_router_skips_invalid_route_metrics() -> None:
+    session = FakeSession(
+        {
+            "routes": [
+                {
+                    "distance": 1200.0,
+                    "duration": -1.0,
+                    "geometry": {"coordinates": [[-3.7, 40.4], [-3.69, 40.41]]},
+                },
+                {
+                    "distance": 1300.0,
+                    "duration": 650.0,
+                    "geometry": {"coordinates": [[-3.7, 40.4], [-3.68, 40.42]]},
+                },
+            ]
+        }
+    )
+    router = OSRMRouter(
+        base_url="https://example.test/route/v1",
+        user_agent="sun-router-test",
+        timeout_s=5.0,
+        max_alternatives=2,
+        session=session,
+    )
+
+    routes = router.get_routes(
+        origin=Coordinates(lat=40.4, lon=-3.7),
+        destination=Coordinates(lat=40.42, lon=-3.68),
+        profile="driving",
+    )
+
+    assert len(routes) == 1
+    assert routes[0].metrics.duration_s == 650.0
 
 
 def test_osrm_router_requests_fallback_candidates_when_primary_has_one_route() -> None:

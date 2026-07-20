@@ -23,6 +23,13 @@ class Settings:
     geocoder_base_url: str
     reverse_geocoder_base_url: str
     geocoder_min_interval_s: float
+    suggestions_enabled: bool
+    suggestion_provider: str
+    suggestion_endpoint_url: str
+    suggestion_min_query_length: int
+    suggestion_max_results: int
+    suggestion_min_interval_s: float
+    suggestion_debounce_ms: int
     router_provider: str
     router_base_url: str
     router_min_interval_s: float
@@ -43,6 +50,18 @@ def _env_float(name: str, default: float) -> float:
         return float(raw_value)
     except ValueError as exc:
         raise ConfigError(f"{name} must be a number.") from exc
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    clean_value = raw_value.strip().lower()
+    if clean_value in {"1", "true", "yes", "on"}:
+        return True
+    if clean_value in {"0", "false", "no", "off"}:
+        return False
+    raise ConfigError(f"{name} must be true or false.")
 
 
 def _env_int(name: str, default: int) -> int:
@@ -100,7 +119,7 @@ def _validate_user_agent(value: str) -> str:
 
 def load_settings() -> Settings:
     load_dotenv(dotenv_path=Path.cwd() / ".env", override=False)
-    timezone_name = os.getenv("SUNROUTER_DEFAULT_TIMEZONE", "Europe/Madrid")
+    timezone_name = os.getenv("SUNROUTER_DEFAULT_TIMEZONE", "America/New_York")
     http_timeout_s = _require_range(
         "SUNROUTER_HTTP_TIMEOUT_S",
         _env_float("SUNROUTER_HTTP_TIMEOUT_S", 10.0),
@@ -118,6 +137,30 @@ def load_settings() -> Settings:
         _env_float("SUNROUTER_GEOCODER_MIN_INTERVAL_S", 1.0),
         0.0,
         60.0,
+    )
+    suggestion_min_query_length = _require_int_range(
+        "SUNROUTER_SUGGESTION_MIN_QUERY_LENGTH",
+        _env_int("SUNROUTER_SUGGESTION_MIN_QUERY_LENGTH", 3),
+        1,
+        20,
+    )
+    suggestion_max_results = _require_int_range(
+        "SUNROUTER_SUGGESTION_MAX_RESULTS",
+        _env_int("SUNROUTER_SUGGESTION_MAX_RESULTS", 5),
+        1,
+        10,
+    )
+    suggestion_min_interval_s = _require_range(
+        "SUNROUTER_SUGGESTION_MIN_INTERVAL_S",
+        _env_float("SUNROUTER_SUGGESTION_MIN_INTERVAL_S", 0.35),
+        0.0,
+        60.0,
+    )
+    suggestion_debounce_ms = _require_int_range(
+        "SUNROUTER_SUGGESTION_DEBOUNCE_MS",
+        _env_int("SUNROUTER_SUGGESTION_DEBOUNCE_MS", 350),
+        100,
+        5000,
     )
     router_min_interval_s = _require_range(
         "SUNROUTER_ROUTER_MIN_INTERVAL_S",
@@ -149,6 +192,21 @@ def load_settings() -> Settings:
             ),
         ),
         geocoder_min_interval_s=geocoder_min_interval_s,
+        suggestions_enabled=_env_bool("SUNROUTER_SUGGESTIONS_ENABLED", True),
+        suggestion_provider=os.getenv(
+            "SUNROUTER_SUGGESTION_PROVIDER", "photon"
+        ).lower(),
+        suggestion_endpoint_url=_validate_provider_url(
+            "SUNROUTER_SUGGESTION_ENDPOINT_URL",
+            os.getenv(
+                "SUNROUTER_SUGGESTION_ENDPOINT_URL",
+                "https://photon.komoot.io/api",
+            ),
+        ),
+        suggestion_min_query_length=suggestion_min_query_length,
+        suggestion_max_results=suggestion_max_results,
+        suggestion_min_interval_s=suggestion_min_interval_s,
+        suggestion_debounce_ms=suggestion_debounce_ms,
         router_provider=os.getenv("SUNROUTER_ROUTER_PROVIDER", "osrm").lower(),
         router_base_url=_validate_provider_url(
             "SUNROUTER_ROUTER_BASE_URL",

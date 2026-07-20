@@ -85,11 +85,33 @@ def format_distance_km(distance_m: float) -> str:
 
 
 def format_duration_minutes(duration_s: float) -> str:
+    return format_elapsed_duration(duration_s)
+
+
+def format_elapsed_duration(duration_s: float) -> str:
+    if duration_s < 0.0:
+        raise ValueError("duration must be greater than or equal to zero")
     total_minutes = int(round(duration_s / 60.0))
+    if total_minutes < 60:
+        return f"{total_minutes} min"
+
     hours, minutes = divmod(total_minutes, 60)
-    if hours:
-        return f"{hours}h {minutes}m"
-    return f"{minutes} min"
+    if hours < 48:
+        if minutes:
+            return f"{hours} hr {minutes} min"
+        return f"{hours} hr"
+
+    days, remaining_hours = divmod(hours, 24)
+    parts = [f"{days} day" if days == 1 else f"{days} days"]
+    if remaining_hours:
+        parts.append(f"{remaining_hours} hr")
+    if minutes:
+        parts.append(f"{minutes} min")
+    return " ".join(parts)
+
+
+def format_datetime_with_zone(moment: datetime) -> str:
+    return moment.strftime("%Y-%m-%d %H:%M %Z").strip()
 
 
 def format_coordinates_label(coordinates: Coordinates) -> str:

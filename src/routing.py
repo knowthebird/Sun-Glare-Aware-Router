@@ -301,14 +301,24 @@ def _parse_osrm_routes(
         if len(geometry) < 2:
             continue
 
+        try:
+            distance_m = float(raw_route.get("distance", 0.0))
+            duration_s = float(raw_route.get("duration", 0.0))
+        except (TypeError, ValueError):
+            continue
+        if (
+            not math.isfinite(distance_m)
+            or not math.isfinite(duration_s)
+            or distance_m < 0.0
+            or duration_s < 0.0
+        ):
+            continue
+
         parsed_routes.append(
             Route(
                 route_id=f"route-{index}",
                 geometry=geometry,
-                metrics=RouteMetrics(
-                    distance_m=float(raw_route.get("distance", 0.0)),
-                    duration_s=float(raw_route.get("duration", 0.0)),
-                ),
+                metrics=RouteMetrics(distance_m=distance_m, duration_s=duration_s),
                 metadata={
                     "provider": "osrm",
                     "route_index": index,

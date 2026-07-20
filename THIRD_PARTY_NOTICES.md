@@ -14,11 +14,13 @@ any attribution requirements.
 | --- | --- | --- |
 | `streamlit` | Apache-2.0 | Permissive. Keep Apache license and notice obligations when redistributing the package itself. |
 | `streamlit-folium` | MIT | Permissive. |
+| `streamlit-searchbox` | MIT | Optional autocomplete component used for address suggestions. |
 | `folium` | MIT | Permissive. |
 | `branca` | MIT | Permissive. Imported directly in `src/mapview.py`. |
 | `requests` | Apache-2.0 | Permissive. Keep Apache license and notice obligations when redistributing the package itself. |
 | `astral` | Apache-2.0 | Permissive. |
 | `python-dotenv` | BSD-3-Clause | Permissive. |
+| `timezonefinder` | MIT | Used to infer an origin timezone from confirmed coordinates. |
 | `tzdata` | Apache-2.0 | Permissive. Windows-only runtime dependency in this project. |
 
 ## Development Dependencies
@@ -39,3 +41,10 @@ MIT.
 The main extra point to remember is that Apache-2.0 packages are still
 permissive but carry their own attribution and notice requirements when you
 redistribute those packages or substantial bundled copies of them.
+
+## External Services
+
+The default suggestion endpoint uses the public Photon demo service operated by
+Komoot at `https://photon.komoot.io/api`. Photon is an OpenStreetMap-based
+geocoder and should only be used for light, fair-use demos unless the endpoint
+is changed to infrastructure appropriate for the traffic level.

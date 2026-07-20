@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from datetime import date, time
 
-from src.models import Coordinates, GeocodeResult, LocationPickerState, SelectedLocation
+from src.models import (
+    AddressSuggestion,
+    Coordinates,
+    GeocodeResult,
+    LocationPickerState,
+    SelectedLocation,
+)
 from src.pickers import (
     apply_picker_search_result,
+    apply_picker_suggestion_result,
     build_analysis_request,
     can_generate_routes,
     confirm_picker_location,
@@ -51,6 +58,38 @@ def test_search_without_result_keeps_state_coherent() -> None:
     assert updated.map_center == default_center
     assert updated.confirmed_location is None
     assert updated.map_revision == 1
+
+
+def test_suggestion_selection_sets_provisional_result_and_keeps_provider_id() -> None:
+    default_center = Coordinates(lat=40.4168, lon=-3.7038)
+    previous = LocationPickerState(
+        query_text="Madrid, Spain",
+        provisional_result=None,
+        map_center=default_center,
+        confirmed_location=SelectedLocation(
+            coordinates=default_center,
+            label="Madrid",
+            label_source="reverse_geocode",
+        ),
+        map_revision=2,
+    )
+    suggestion = AddressSuggestion(
+        label="Gran Via, Madrid, Spain",
+        coordinates=Coordinates(lat=40.4203, lon=-3.7058),
+        provider_id="W:123",
+    )
+
+    updated = apply_picker_suggestion_result(previous, suggestion)
+
+    assert updated.query_text == suggestion.label
+    assert updated.provisional_result == GeocodeResult(
+        label=suggestion.label,
+        coordinates=suggestion.coordinates,
+        provider_id="W:123",
+    )
+    assert updated.map_center == suggestion.coordinates
+    assert updated.confirmed_location is None
+    assert updated.map_revision == 3
 
 
 def test_confirm_picker_location_prefers_reverse_geocoded_label() -> None:
